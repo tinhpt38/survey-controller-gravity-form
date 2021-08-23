@@ -1,0 +1,2 @@
+<?php 
+// uninstall_plugin()
