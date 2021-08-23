@@ -14,6 +14,9 @@ error_reporting(E_ERROR | E_PARSE);
 
 require_once __DIR__ . '/includes/database_helper.php';
 
+
+//region -- GRAVITY HANDLER
+
 add_action('gform_form_list_forms', 'udoo_pre_render_function', 10, 6);
 
 function udoo_pre_render_function($forms, $search_query, $active, $sort_column, $sort_direction, $trash)
@@ -22,7 +25,7 @@ function udoo_pre_render_function($forms, $search_query, $active, $sort_column, 
     if (current_user_can('administrator')) {
         return $forms;
     }
-   
+
     $db_helper = new DatabaseHelper();
     global $current_user;
     $final_forms = array();
@@ -35,7 +38,7 @@ function udoo_pre_render_function($forms, $search_query, $active, $sort_column, 
     return $final_forms;
 }
 
-add_filter('gform_form_list_count', 'udoo_change_list_count', 10,1);
+add_filter('gform_form_list_count', 'udoo_change_list_count', 10, 1);
 function udoo_change_list_count($form_count)
 {
 
@@ -68,7 +71,84 @@ function udoo_change_columns($columns)
     return $columns;
 }
 
+//endregion
 
+//region -- CUSTOM POST TYPE
+
+function compile_post_type_capabilities($singular = 'post', $plural = 'posts')
+{
+    return [
+        'edit_post'      => "edit_$singular",
+        'read_post'      => "read_$singular",
+        'delete_post'        => "delete_$singular",
+        'edit_posts'         => "edit_$plural",
+        'edit_others_posts'  => "edit_others_$plural",
+        'publish_posts'      => "publish_$plural",
+        'read_private_posts'     => "read_private_$plural",
+        'read'                   => "read",
+        'delete_posts'           => "delete_$plural",
+        'delete_private_posts'   => "delete_private_$plural",
+        'delete_published_posts' => "delete_published_$plural",
+        'delete_others_posts'    => "delete_others_$plural",
+        'edit_private_posts'     => "edit_private_$plural",
+        'edit_published_posts'   => "edit_published_$plural",
+        'create_posts'           => "edit_$plural",
+    ];
+}
+
+function udoo_register_survey_share_post()
+{
+    $label = array(
+        'name' => __('Take Survey', 'survey-controller'),
+        'singular_name' => __('Take Survey', 'survey-controller'),
+        'add_new_item' => __('New Take Survey', 'survey-controller'),
+        'edit_item' => __('Edit Take Survey', 'survey-controller'),
+        'view_item' => __('View Take Survey', 'survey-controller'),
+        'view_items' => __('View Take Surveys', 'survey-controller'),
+        'search_items' => __('Search survey', 'survey-controller'),
+        'not_found' => __('No Take Survey found', 'survey-controller'),
+        'not_found_in_trash' => __('No Take Survey found in trash', 'survey-controller'),
+        'all_items' => __('All Take Survey', 'survey-controller'),
+    );
+
+    $args = array(
+        'labels' => $label,
+        'description' => __('Embber Gravity Form in post'),
+        'supports' => array(
+            'title',
+            'editor',
+            'author',
+            'comments',
+            'thumbnail',
+        ),
+        'menu_icon' => 'dashicons-welcome-write-blog',
+        'public' => true,
+        'show_ui' => true,
+        'show_in_menu' => true,
+        'show_in_nav_menus' => true,
+        'show_in_admin_bar' => true,
+        'menu_position' => 5,
+        'can_export' => true,
+        'map_meta_cap' => true,
+        // 'show_in_rest' => true, // Required for Gutenberg
+        'hierarchical' => false,
+        'publicly_queryable' => false,
+        'query_var'          => true,
+        'rewrite' => array('slug' => 'tsurvey'),
+        'has_archive' => true,
+        'capability_type' => 'tsurvey',
+        'capabilities' => compile_post_type_capabilities('tsurvey', 'tsurveys')
+    );
+
+    register_post_type('tsurvey', $args);
+}
+
+add_action('init', 'udoo_register_survey_share_post');
+
+
+
+
+//region -- PLUGIN HANDLE
 /**
  * Create new table in database to map form with user ID for capability
  * @author Tinh Phan <tinhpt.38@gmail.com>
@@ -90,3 +170,5 @@ function udoo_create_db()
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
 }
+
+//endregion
