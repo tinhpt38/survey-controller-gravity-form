@@ -71,28 +71,51 @@ function udoo_change_columns($columns)
     return $columns;
 }
 
+
+//before -- gform_shortcode_builder_forms
+
+add_filter('gform_block_form_forms', function ($forms) {
+    if (current_user_can('administrator')) {
+        return $forms;
+    }
+    $db_helper = new DatabaseHelper();
+    global $current_user;
+    foreach ($forms as $key => $form) {
+        $map_author = $db_helper->get($form['id'])[0];
+        if (strval($map_author->user_id) != strval($current_user->ID)) {
+            unset($forms[$key]);
+        }
+    }
+    return array_values($forms);
+});
+
+
 //endregion
 
 //region -- CUSTOM POST TYPE
 
-function compile_post_type_capabilities($singular = 'post', $plural = 'posts')
+function udoo_compile_post_type_capabilities($singular = 'post', $plural = 'posts')
 {
     return [
-        'edit_post'      => "edit_$singular",
-        'read_post'      => "read_$singular",
-        'delete_post'        => "delete_$singular",
-        'edit_posts'         => "edit_$plural",
-        'edit_others_posts'  => "edit_others_$plural",
-        'publish_posts'      => "publish_$plural",
-        'read_private_posts'     => "read_private_$plural",
-        'read'                   => "read",
-        'delete_posts'           => "delete_$plural",
-        'delete_private_posts'   => "delete_private_$plural",
+        'read_post' => "read_$singular",
+        'edit_post' => "edit_$singular",
+        'delete_post' => "delete_$singular",
+        'publish_post' => "publish_$singular",
+
+        'read' => "read_$singular",
+        'read_private_posts' => "read_private_$plural",
+
+        'edit_posts' => "edit_$plural",
+        'edit_others_posts' => "edit_others_$plural",
+        'edit_private_posts' => "edit_private_$plural",
+        'edit_published_posts' => "edit_published_$plural",
+
+        'delete_posts' => "delete_$plural",
+        'delete_private_posts' => "delete_private_$plural",
         'delete_published_posts' => "delete_published_$plural",
-        'delete_others_posts'    => "delete_others_$plural",
-        'edit_private_posts'     => "edit_private_$plural",
-        'edit_published_posts'   => "edit_published_$plural",
-        'create_posts'           => "edit_$plural",
+        'delete_others_posts' => "delete_others_$plural",
+        'create_posts' => "edit_$plural",
+        'publish_posts' => "publish_$plural",
     ];
 }
 
@@ -130,14 +153,14 @@ function udoo_register_survey_share_post()
         'menu_position' => 5,
         'can_export' => true,
         'map_meta_cap' => true,
-        // 'show_in_rest' => true, // Required for Gutenberg
+        'show_in_rest' => true, // Required for Gutenberg
         'hierarchical' => false,
-        'publicly_queryable' => false,
-        'query_var'          => true,
+//        'publicly_queryable' => false,
+        'query_var' => true,
         'rewrite' => array('slug' => 'tsurvey'),
         'has_archive' => true,
-        'capability_type' => 'tsurvey',
-        'capabilities' => compile_post_type_capabilities('tsurvey', 'tsurveys')
+        'capability_type' => 'post',
+        'capabilities' => udoo_compile_post_type_capabilities('tsurvey', 'tsurveys')
     );
 
     register_post_type('tsurvey', $args);
@@ -145,8 +168,23 @@ function udoo_register_survey_share_post()
 
 add_action('init', 'udoo_register_survey_share_post');
 
+function udoo_exclude_another_author_posts($query)
+{
+    if (current_user_can('administrator')) {
+        return $query;
+    }
+    if ($query->query['post_type'] !== 'tsurvey') {
+        return $query;
+    }
+
+    global $current_user;
+    $query->set('author', $current_user->ID);
+    return $query;
 
 
+}
+
+add_action('pre_get_posts', 'udoo_exclude_another_author_posts');
 
 //region -- PLUGIN HANDLE
 /**
