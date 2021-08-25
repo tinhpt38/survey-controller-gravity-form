@@ -47,7 +47,6 @@ class DatabaseHelper
   {
     global $wpdb;
     $result = $this->get($form_id);
-    error_log(print_r($result,true));
     if(empty($result)){
       $this->insert($form_id, $user_id);
     }else{

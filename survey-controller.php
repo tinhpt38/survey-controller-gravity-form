@@ -155,7 +155,7 @@ function udoo_register_survey_share_post()
         'map_meta_cap' => true,
         'show_in_rest' => true, // Required for Gutenberg
         'hierarchical' => false,
-//        'publicly_queryable' => false,
+        //        'publicly_queryable' => false,
         'query_var' => true,
         'rewrite' => array('slug' => 'tsurvey'),
         'has_archive' => true,
@@ -180,13 +180,139 @@ function udoo_exclude_another_author_posts($query)
     global $current_user;
     $query->set('author', $current_user->ID);
     return $query;
-
-
 }
 
 add_action('pre_get_posts', 'udoo_exclude_another_author_posts');
 
+
+function udoo_register_meta_boxes()
+{
+    add_meta_box('invite-friends', __('Invite Friends', 'survey-controller'), 'udoo_render_invite_friend', 'tsurvey');
+}
+
+function get_option_users()
+{
+    $user = get_users();
+    $uid = array_column($user, 'ID');
+    $un = array_column($user, 'display_name');
+    return array_combine($uid, $un);
+}
+
+function find_friend($value, &$users)
+{
+    if (is_numeric($value)) {
+        $username = $users[$value];
+        unset($users[$value]);
+        return array($value => $username);
+    }
+    return array($value => $value);
+}
+
+function udoo_render_invite_friend()
+{
+    $users = get_option_users();
+    global $post;
+    $encrypted = get_post_meta($post->ID, '__invite_friends__', true);
+    $options = json_decode($encrypted);
+    if (!empty($options)) {
+        $friends = array();
+        if (isset($options)) {
+            foreach ($options as $key) {
+                array_push($friends, find_friend($key, $users));
+            }
+        }
+        $invite = [];
+        $final = [];
+        foreach ($friends as $user) {
+            $id = key($user);
+            $invite[$id] = $user[$id];
+            array_push($invite, $id);
+            $final[$id] = $user[$id];
+        }
+
+        foreach ($users as $id => $user) {
+            $final[$id] = $user;
+        }
+    }
+
+
+    ?>
+    <div>
+        <select name="udoo_invite_friends[]" class="form-control" multiple="multiple">
+            <?php if (empty($options)) : ?>
+                <?php foreach ($users as $id => $name) : ?>
+                    <option value="<?php echo $id ?>"><?php echo $name ?></option>
+                <?php endforeach; ?>
+            <?php else : ?>
+                <?php foreach ($final as $id => $name) : ?>
+                    <option <?php echo in_array($id, $invite) ? 'selected' : '' ?>
+                            value="<?php echo $id ?>"><?php echo $name ?></option>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+        </select>
+    </div>
+    <span> <?php echo __('Type user name or email to invite this post', 'survey-controller') ?></span>
+    <?php
+}
+
+add_action('add_meta_boxes', 'udoo_register_meta_boxes');
+
+function is_phone($phone){
+    return preg_match('/^[0-9]{10}+$/', $phone);
+}
+
+function validate_email($email){
+    return (!preg_match("/^([a-z0-9\+_\-]+)(\.[a-z0-9\+_\-]+)*@([a-z0-9\-]+\.)+[a-z]{2,6}$/ix", $email)) ? false : true;
+}
+
+function udoo_handle_invite_share_survey($post_id)
+{
+    error_log(__METHOD__);
+    $friends = $_POST['udoo_invite_friends'];
+    udoo_save_share_survey($friends, $post_id);
+    $email_list = [];
+    $phone_list = [];
+
+    foreach ($friends as $friend){
+      if(validate_email($friend)){
+            array_push($email_list,$friend);
+        }else if(is_phone($friend)){
+            array_push($phone_list,$friend);
+        }else if(is_numeric($friend)){
+          $user = get_users(array('ID' => $friend))[0];
+          array_push($email_list,$user->user_email);
+      }
+    }
+    error_log(print_r($email_list,true));
+    error_log(print_r($phone_list,true));
+}
+
+function udoo_save_share_survey($friends, $post_id){
+    $encrypted = json_encode($friends);
+    if (get_post_meta($post_id, '__invite_friends__') !== null) {
+        update_post_meta($post_id, '__invite_friends__', $encrypted);
+    } else {
+        add_post_meta($post_id, '__invite_friends__', $encrypted);
+    }
+}
+
+add_action("save_post_tsurvey", 'udoo_handle_invite_share_survey', 10, 1);
+
+
 //region -- PLUGIN HANDLE
+
+function udoo_equenue_js()
+{
+    wp_enqueue_script('invite_friend_meta_box', plugin_dir_url(__FILE__) . '/admin/js/invite_friend_metabox.js', array(), '1.0');
+    wp_enqueue_script('udoo_select2', plugin_dir_url(__FILE__) . '/admin/js/select2.js', array(), '4.1.0');
+    wp_enqueue_style('udoo_select2_css', plugin_dir_url(__FILE__) . '/admin/css/select2.css', false, '1.0.0');
+    wp_enqueue_style('udoo_invite_friend_css', plugin_dir_url(__FILE__) . '/admin/css/styles.css', false, '1.0.0');
+}
+
+add_action('admin_enqueue_scripts', 'udoo_equenue_js');
+
+
 /**
  * Create new table in database to map form with user ID for capability
  * @author Tinh Phan <tinhpt.38@gmail.com>
